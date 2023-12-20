@@ -5,6 +5,7 @@ import {
 } from "conf/db";
 import * as jose from "jose";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
@@ -30,7 +31,7 @@ const getRoleId = async (role: string) => {
 };
 
 const checkUserExists = async (email: string) => {
-  const query = `SELECT u.username, r.role_name FROM Users as u 
+  const query = `SELECT u.username, r.role_name,u.id FROM Users as u 
                   JOIN UserRoles as ur ON u.id = ur.user_id 
                   JOIN Roles as r ON ur.role_id = r.id
                   WHERE u.email = ?`;
@@ -48,6 +49,7 @@ const createUser = async (
   roleId: number
 ) => {
   const id = randomUUID();
+  z.string().uuid().parse(id); // throws if invalid uuid
   const hashedPassword = await hashPassword(password);
   const createUserQuery = `INSERT INTO Users (id,email, username, password_hash) VALUES (?,?, ?,?)`;
   const createUserParams = [id, email, username, hashedPassword];
@@ -59,13 +61,15 @@ const createUser = async (
     { query: createRoleQuery, params: createRoleParams },
   ];
 
-  return await executeTransaction(queries);
+  await executeTransaction(queries);
+  return id;
 };
 
-const getJWT = async (email: string) => {
+const getJWT = async (email: string, id: string) => {
   const secret = new TextEncoder().encode(JWT_SECRET);
   const jwt = await new jose.SignJWT({
     email,
+    id,
   })
     .setProtectedHeader({ alg: "HS256" })
     .sign(secret);

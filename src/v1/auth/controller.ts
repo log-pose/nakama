@@ -42,9 +42,9 @@ const register = async (req: Request, res: Response) => {
   }
 
   try {
-    await createUser(email, username, password, roleId);
+    const id = await createUser(email, username, password, roleId);
 
-    const token = await getJWT(email);
+    const token = await getJWT(email, id);
 
     return res.status(200).json({
       message: "User created successfully",
@@ -79,13 +79,13 @@ const login = async (req: Request, res: Response) => {
       logger.error("User does not exist");
       return res.status(400).json({ message: "User does not exist" });
     }
-    const { username, role_name } = user;
+    const { username, role_name, id } = user;
     const passwordIsValid = await verifyPassword(password);
     if (!passwordIsValid) {
       logger.error("Invalid password");
       return res.status(400).json({ message: "Invalid password" });
     }
-    const token = await getJWT(email);
+    const token = await getJWT(email, id);
     return res.status(200).json({
       message: "User logged in successfully",
       data: {

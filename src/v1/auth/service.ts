@@ -1,8 +1,6 @@
-import {
-  executeQuery,
-  executeQueryWithParams,
-  executeTransaction,
-} from "conf/db";
+import psqlClient from "conf/db";
+import { roles, user, user_roles } from "db/schema";
+import { eq } from "drizzle-orm";
 import * as jose from "jose";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -22,24 +20,32 @@ const verifyPassword = async (password: string) => {
 };
 
 const getRoleId = async (role: string) => {
-  const query = `SELECT id FROM Roles WHERE role_name = '${role}'`;
-  const result: any = await executeQuery(query);
-  if (result.length === 0) {
-    return -1;
-  }
-  return parseInt(result[0].id);
+  const result = await psqlClient
+    .select({
+      id: roles.id,
+    })
+    .from(roles)
+    .where(eq(roles.role_name, role));
+  return result[0].id;
 };
 
 const checkUserExists = async (email: string) => {
-  const query = `SELECT u.username, r.role_name,u.id FROM Users as u 
-                  JOIN UserRoles as ur ON u.id = ur.user_id 
-                  JOIN Roles as r ON ur.role_id = r.id
-                  WHERE u.email = ?`;
-  const result: any = await executeQueryWithParams(query, [email]);
+  const result = await psqlClient
+    .select({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role_name: roles.role_name,
+    })
+    .from(user)
+    .where(eq(user.email, email))
+    .leftJoin(user_roles, eq(user.id, user_roles.user_id))
+    .leftJoin(roles, eq(user_roles.role_id, roles.id));
+
   if (result.length === 0) {
     return null;
   }
-  return result[0];
+  return result;
 };
 
 const createUser = async (
@@ -51,17 +57,16 @@ const createUser = async (
   const id = randomUUID();
   z.string().uuid().parse(id); // throws if invalid uuid
   const hashedPassword = await hashPassword(password);
-  const createUserQuery = `INSERT INTO Users (id,email, username, password_hash) VALUES (?,?, ?,?)`;
-  const createUserParams = [id, email, username, hashedPassword];
-  const createRoleQuery = `INSERT INTO UserRoles (user_id, role_id) VALUES (?, ?)`;
-  const createRoleParams = [id, roleId];
-
-  const queries = [
-    { query: createUserQuery, params: createUserParams },
-    { query: createRoleQuery, params: createRoleParams },
-  ];
-
-  await executeTransaction(queries);
+  await psqlClient.transaction(async (trx) => {
+    await trx
+      .insert(user)
+      .values([{ id, email, username, password: hashedPassword }])
+      .onConflictDoNothing();
+    await trx
+      .insert(user_roles)
+      .values([{ user_id: id, role_id: roleId }])
+      .onConflictDoNothing();
+  });
   return id;
 };
 

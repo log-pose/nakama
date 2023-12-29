@@ -9,7 +9,7 @@ import {
 } from "./service";
 
 const register = async (req: Request, res: Response) => {
-  const { role, email, username, password } = req.body;
+  let { role, email, username, password } = req.body;
   if (!role) {
     logger.error("Missing role");
     return res.status(400).json({ message: "Missing role" });
@@ -27,6 +27,7 @@ const register = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "Missing password" });
   }
 
+  role = role.toLowerCase();
   const roleId = await getRoleId(role);
   if (roleId === -1) {
     logger.error("Invalid role");
@@ -43,7 +44,6 @@ const register = async (req: Request, res: Response) => {
 
   try {
     const id = await createUser(email, username, password, roleId);
-
     const token = await getJWT(email, id);
 
     return res.status(200).json({
@@ -79,7 +79,7 @@ const login = async (req: Request, res: Response) => {
       logger.error("User does not exist");
       return res.status(400).json({ message: "User does not exist" });
     }
-    const { username, role_name, id } = user;
+    const { username, role_name, id } = user[0];
     const passwordIsValid = await verifyPassword(password);
     if (!passwordIsValid) {
       logger.error("Invalid password");
@@ -115,7 +115,7 @@ const getUser = async (req: Request, res: Response) => {
       logger.error("User does not exist");
       return res.status(400).json({ message: "User does not exist" });
     }
-    const { username, role_name } = user;
+    const { username, role_name } = user[0];
     return res.status(200).json({
       message: "User found",
       data: {

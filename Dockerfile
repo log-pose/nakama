@@ -1,4 +1,4 @@
-FROM oven/bun:debian as base
+FROM oven/bun:latest as base
 
 WORKDIR /app
 
@@ -9,4 +9,4 @@ RUN bun install
 
 COPY . .
 
-CMD ["bun", "index.ts"]
+CMD bun migrate:up && bun index.ts
